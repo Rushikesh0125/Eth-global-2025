@@ -11,8 +11,8 @@ class FirebaseService {
     }
 
     this.db = admin.firestore();
-    this.nullifierCollection = this.db.collection("nullifiers");
-    this.userCollection = this.db.collection("users");
+    this.nullifierCollection = this.db.collection("zk_express_nullifiers");
+    this.userCollection = this.db.collection("zk_express_users");
   }
 
   /**
