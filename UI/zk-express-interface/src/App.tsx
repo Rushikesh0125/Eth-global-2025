@@ -3,19 +3,90 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, Store, Zap } from "lucide-react";
+import { Truck, Store, Zap, ArrowLeft } from "lucide-react";
+import LogisticsDashboard from "./pages/LogisticsDashboard";
+import DeliveryManagement from "./pages/DeliveryManagement";
+import OracleInterface from "./pages/OracleInterface";
 
 type UserType = "merchant" | "logistics";
+type LogisticsPage = "dashboard" | "delivery" | "oracle";
 
 function App() {
   const [userType, setUserType] = useState<UserType | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentLogisticsPage, setCurrentLogisticsPage] = useState<LogisticsPage>("dashboard");
 
   const handleLogin = () => {
     console.log(`Logging in as ${userType} with email: ${email}`);
-    // Add your login logic here
+    setIsLoggedIn(true);
   };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserType(null);
+    setEmail("");
+    setPassword("");
+    setCurrentLogisticsPage("dashboard");
+  };
+
+  // If logged in as logistics, show logistics pages
+  if (isLoggedIn && userType === "logistics") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Navigation Header */}
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-6 w-6 text-blue-600" />
+                  <h1 className="text-xl font-bold text-gray-900">zk-express Logistics</h1>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant={currentLogisticsPage === "dashboard" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentLogisticsPage("dashboard")}
+                  >
+                    Dashboard
+                  </Button>
+                  <Button
+                    variant={currentLogisticsPage === "delivery" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentLogisticsPage("delivery")}
+                  >
+                    Delivery Management
+                  </Button>
+                  <Button
+                    variant={currentLogisticsPage === "oracle" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentLogisticsPage("oracle")}
+                  >
+                    Oracle Interface
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Page Content */}
+        <div className="flex-1">
+          {currentLogisticsPage === "dashboard" && <LogisticsDashboard />}
+          {currentLogisticsPage === "delivery" && <DeliveryManagement />}
+          {currentLogisticsPage === "oracle" && <OracleInterface />}
+        </div>
+      </div>
+    );
+  }
 
   if (!userType) {
     return (
