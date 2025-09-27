@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "zk-express Button Injector",
+  "version": "0.1.0",
+  "matches": ["https://amazon.in/*", "https://amazon.com/*"],
+  "description": "Injects the 'Buy with zk-express' button onto e-commerce product pages for the ETHGlobal hackathon.",
+  "permissions": ["scripting", "activeTab"],
+  "action": {
+    "matches": ["https://amazon.in/*", "https://amazon.com/*"],
+    "default_title": "Inject zk-express button"
+  },
+
+  "host_permissions": ["https://amazon.in/*", "https://amazon.com/*"]
+}
