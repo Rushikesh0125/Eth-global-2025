@@ -9,10 +9,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@selfxyz/core": "^1.1.0-beta.6",
+    "aws": "^0.0.3-2",
+    "aws-cli": "^0.0.2",
     "axios": "^1.12.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "ethers": "^6.15.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "serverless-http": "^4.0.0",
+    "uuid": "^13.0.0"
   }
 }

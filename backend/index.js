@@ -1,7 +1,9 @@
 const express = require('express');
 const { ethers } = require('ethers');
 const cors = require('cors');
+const { v4 } = require('uuid');
 require('dotenv').config();
+const SelfBackendVerifier = require('@selfxyz/core')
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -269,22 +271,88 @@ app.post('/reputation/batch', authenticateApiKey, async (req, res) => {
     }
 });
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-    console.error('Unhandled error:', error);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        details: error.message
+const selfBackendVerifier = new SelfBackendVerifier(
+    "test-scope", // scope string
+    "https://ke2j1k45n1.execute-api.eu-west-3.amazonaws.com/dev/api/verify", // endpoint (your backend verification API)
+    false, // mockPassport → false = testnet, realPassport → true = mainnet
+    AllIds, // allowed attestation IDs map
+    new DefaultConfigStore({
+        // config store (see separate docs)
+        minimumAge: 18,
+        excludedCountries: [],
+        ofac: true,
+    }),
+    "uuid"
+);
+
+
+app.post("/api/create-session", async (req, res) => {
+
+    const uuid = v4();
+
+    return res.status(200).json({
+        status: "success",
+        res: uuid,
+        result: true,
     });
+
+})
+
+app.post("/api/verify", async (req, res) => {
+    try {
+        const { attestationId, proof, publicSignals, userContextData } = req.body;
+        if (!proof || !publicSignals || !attestationId || !userContextData) {
+            return res.status(200).json({
+                status: "error",
+                result: false,
+                reason:
+                    "Proof, publicSignals, attestationId and userContextData are required",
+            });
+        }
+
+        const result = await selfBackendVerifier.verify(
+            attestationId,
+            proof,
+            publicSignals,
+            userContextData
+        );
+
+        const nullifier = result.discloseOutput.nullifier;
+
+
+        const { isValid, isMinimumAgeValid, isOfacValid } = result.isValidDetails;
+        if (!isValid || !isMinimumAgeValid || isOfacValid) {
+            let reason = "Verification failed";
+            if (!isMinimumAgeValid) reason = "Minimum age verification failed";
+            if (isOfacValid) reason = "OFAC verification failed";
+            return res.status(200).json({
+                status: "error",
+                result: false,
+                reason,
+            });
+        }
+
+        return res.status(200).json({
+            status: "success",
+            result: true,
+        });
+    } catch (error) {
+        return res.status(200).json({
+            status: "error",
+            result: false,
+            reason: error instanceof Error ? error.message : "Unknown error",
+        });
+    }
 });
 
-// 404 handler
-app.use('*', (req, res) => {
+// Error handling middleware
+app.use((req, res, next) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found'
     });
 });
+
+
 
 module.exports = app;
