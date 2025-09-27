@@ -1,0 +1,112 @@
+{
+  "_format": "hh3-artifact-1",
+  "contractName": "RepRegistry",
+  "sourceName": "contracts/RepRegistry.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "manager",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "MANAGER",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "userIdentifier",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "points",
+          "type": "uint256"
+        }
+      ],
+      "name": "decreaseRep",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "userIdentifier",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getRepByUser",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "userIdentifier",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "points",
+          "type": "uint256"
+        }
+      ],
+      "name": "increaseRep",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "reputation",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b506040516102b13803806102b1833981016040819052602b916060565b6001600160a01b038116603c575f5ffd5b600180546001600160a01b0319166001600160a01b0392909216919091179055608b565b5f60208284031215606f575f5ffd5b81516001600160a01b03811681146084575f5ffd5b9392505050565b610219806100985f395ff3fe608060405234801561000f575f5ffd5b5060043610610055575f3560e01c80630562932914610059578063064a9d9f1461006e5780631b2df8501461009f578063a25ab51a146100c6578063e998f09d146100d9575b5f5ffd5b61006c61006736600461016c565b6100f8565b005b61008d61007c36600461018c565b5f9081526020819052604090205490565b60405190815260200160405180910390f35b61008d7faf290d8680820aad922855f39b306097b20e28774d6c1ad35a20325630c3a02c81565b61006c6100d436600461016c565b610137565b61008d6100e736600461018c565b5f6020819052908152604090205481565b60015433906001600160a01b03168114610110575f5ffd5b5f838152602081905260408120805484929061012d9084906101b7565b9091555050505050565b60015433906001600160a01b0316811461014f575f5ffd5b5f838152602081905260408120805484929061012d9084906101d0565b5f5f6040838503121561017d575f5ffd5b50508035926020909101359150565b5f6020828403121561019c575f5ffd5b5035919050565b634e487b7160e01b5f52601160045260245ffd5b818103818111156101ca576101ca6101a3565b92915050565b808201808211156101ca576101ca6101a356fea26469706673582212200231926be1f0d4f1c0eb0e026c5860ec371c7ba4035efda41a977b2234af491064736f6c634300081c0033",
+  "deployedBytecode": "0x608060405234801561000f575f5ffd5b5060043610610055575f3560e01c80630562932914610059578063064a9d9f1461006e5780631b2df8501461009f578063a25ab51a146100c6578063e998f09d146100d9575b5f5ffd5b61006c61006736600461016c565b6100f8565b005b61008d61007c36600461018c565b5f9081526020819052604090205490565b60405190815260200160405180910390f35b61008d7faf290d8680820aad922855f39b306097b20e28774d6c1ad35a20325630c3a02c81565b61006c6100d436600461016c565b610137565b61008d6100e736600461018c565b5f6020819052908152604090205481565b60015433906001600160a01b03168114610110575f5ffd5b5f838152602081905260408120805484929061012d9084906101b7565b9091555050505050565b60015433906001600160a01b0316811461014f575f5ffd5b5f838152602081905260408120805484929061012d9084906101d0565b5f5f6040838503121561017d575f5ffd5b50508035926020909101359150565b5f6020828403121561019c575f5ffd5b5035919050565b634e487b7160e01b5f52601160045260245ffd5b818103818111156101ca576101ca6101a3565b92915050565b808201808211156101ca576101ca6101a356fea26469706673582212200231926be1f0d4f1c0eb0e026c5860ec371c7ba4035efda41a977b2234af491064736f6c634300081c0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {},
+  "immutableReferences": {},
+  "inputSourceName": "project/contracts/RepRegistry.sol",
+  "buildInfoId": "solc-0_8_28-e02c98e4c983e261613aaa5d951c8402add13e03"
+}

@@ -30,12 +30,12 @@ const config: HardhatUserConfig = {
       type: "edr-simulated",
       chainType: "op",
     },
-    sepolia: {
+    flowTestnet: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
-    },
+      url: configVariable("FLOW_RPC_URL"),
+      accounts: [configVariable("PRIVATE_KEY")]
+    }
   },
 };
 

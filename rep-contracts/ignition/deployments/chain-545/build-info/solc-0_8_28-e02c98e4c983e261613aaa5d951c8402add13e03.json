@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-e02c98e4c983e261613aaa5d951c8402add13e03",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/RepRegistry.sol": "project/contracts/RepRegistry.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/RepRegistry.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract RepRegistry {\n    \n    mapping (bytes32 => uint256) public reputation;\n\n    bytes32 public constant MANAGER = keccak256(\"MANAGER\");\n\n    address repManager;\n\n    modifier hasRole(address sender) {\n        require(sender == repManager);\n        _;\n    }\n\n    constructor(address manager) {\n        require(manager != address(0));\n        repManager = manager;\n    }\n\n    function increaseRep(bytes32 userIdentifier, uint256 points) hasRole(msg.sender) external{\n\n        reputation[userIdentifier] += points;\n        \n    }\n\n    function decreaseRep(bytes32 userIdentifier, uint256 points) hasRole(msg.sender) external{\n\n        reputation[userIdentifier] -= points;\n        \n    }\n\n    function getRepByUser(bytes32 userIdentifier) public view returns(uint256){\n        return reputation[userIdentifier];\n    }\n\n}"
+      }
+    }
+  }
+}
