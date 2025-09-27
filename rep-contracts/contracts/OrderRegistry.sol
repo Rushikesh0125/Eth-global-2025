@@ -37,8 +37,8 @@ contract OrderRegistry is AccessControl {
         string productCategory;
         uint8 deliveryAttempts;
         uint256 returnedAt;
-        string returnReason;
         bool isActive;
+        string destination;
     }
     
     // Mappings
@@ -72,7 +72,6 @@ contract OrderRegistry is AccessControl {
     event ProductReturned(
         bytes32 indexed orderId,
         bytes32 indexed userId,
-        string returnReason,
         uint256 returnedAt
     );
     
@@ -95,7 +94,8 @@ contract OrderRegistry is AccessControl {
         bytes32 orderId,
         bytes32 userId,
         uint256 orderValue,
-        string memory productCategory
+        string memory productCategory,
+        string memory destination
     ) external onlyRecorder {
         require(!orders[orderId].isActive, "Order already exists");
         require(orderValue > 0, "Order value must be greater than 0");
@@ -111,8 +111,8 @@ contract OrderRegistry is AccessControl {
             productCategory: productCategory,
             deliveryAttempts: 0,
             returnedAt: 0,
-            returnReason: "",
-            isActive: true
+            isActive: true,
+            destination: destination
         });
         
         orders[orderId] = newOrder;
@@ -155,19 +155,17 @@ contract OrderRegistry is AccessControl {
     }
     
     function recordProductReturn(
-        bytes32 orderId,
-        string memory returnReason
+        bytes32 orderId
     ) external onlyRecorder orderExists(orderId) {
         Order storage order = orders[orderId];
         
         require(order.status == OrderStatus.DELIVERED, "Order must be delivered to return");
         
         order.status = OrderStatus.RETURNED;
-        order.returnReason = returnReason;
         order.returnedAt = block.timestamp;
         order.updatedAt = block.timestamp;
         
-        emit ProductReturned(orderId, order.userId, returnReason, block.timestamp);
+        emit ProductReturned(orderId, order.userId, block.timestamp);
     }
     
     function markOrderCompleted(bytes32 orderId) external onlyRecorder orderExists(orderId) {
