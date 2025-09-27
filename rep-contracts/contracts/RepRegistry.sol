@@ -1,27 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-
-contract RepRegistry is AccessControl{
+contract RepRegistry {
     
     mapping (bytes32 => uint256) public reputation;
 
     bytes32 public constant MANAGER = keccak256("MANAGER");
 
-    constructor(address manager) {
-        grantRole(MANAGER, manager);
+    address repManager;
+
+    modifier hasRole(address sender) {
+        require(sender == repManager);
+        _;
     }
 
-    function increaseRep(bytes32 userIdentifier, uint256 points) external{
-        require(hasRole(MANAGER, msg.sender), "Only manager can update rep points");
+    constructor(address manager) {
+        require(manager != address(0));
+        repManager = manager;
+    }
+
+    function increaseRep(bytes32 userIdentifier, uint256 points) hasRole(msg.sender) external{
 
         reputation[userIdentifier] += points;
         
     }
 
-    function decreaseRep(bytes32 userIdentifier, uint256 points) external{
-        require(hasRole(MANAGER, msg.sender), "Only manager can update rep points");
+    function decreaseRep(bytes32 userIdentifier, uint256 points) hasRole(msg.sender) external{
 
         reputation[userIdentifier] -= points;
         
