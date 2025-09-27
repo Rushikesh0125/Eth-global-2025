@@ -270,21 +270,13 @@ app.post('/reputation/batch', authenticateApiKey, async (req, res) => {
 });
 
 // Error handling middleware
-app.use((error, req, res, next) => {
-    console.error('Unhandled error:', error);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        details: error.message
-    });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
+app.use((req, res, next) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found'
     });
 });
+
+
 
 module.exports = app;
