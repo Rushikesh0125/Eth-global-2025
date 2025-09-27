@@ -4,7 +4,7 @@ const path = require("path");
 class FirebaseService {
   constructor() {
     if (!admin.apps.length) {
-      const serviceAccount = require(path.resolve("./serviceAccountKey.json"));
+      const serviceAccount = require(path.resolve("./serviceAccount.json"));
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });

@@ -3,8 +3,12 @@ const { ethers } = require("ethers");
 const cors = require("cors");
 const { v4 } = require("uuid");
 require("dotenv").config();
-const SelfBackendVerifier = require("@selfxyz/core");
 const FirebaseService = require("./firebase-service");
+const {
+  AllIds,
+  DefaultConfigStore,
+  SelfBackendVerifier,
+} = require("@selfxyz/core");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
