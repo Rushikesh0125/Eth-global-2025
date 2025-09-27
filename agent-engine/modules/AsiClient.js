@@ -1,3 +1,8 @@
+const axios = require('axios');
+
+/**
+ * ASI API Client for intelligent decision making
+ */
 class ASIClient {
     constructor(apiKey, baseURL = 'https://api.asi1.ai') {
         this.apiKey = apiKey;
@@ -12,6 +17,9 @@ class ASIClient {
         });
     }
 
+    /**
+     * Make a request to ASI API
+     */
     async makeRequest(messages, maxTokens = 1000, temperature = 0.3) {
         try {
             const response = await this.client.post('/v1/chat/completions', {
@@ -29,6 +37,9 @@ class ASIClient {
         }
     }
 
+    /**
+     * Analyze user behavior for reputation scoring
+     */
     async analyzeReputationChange(userData, action, actionContext) {
         const systemPrompt = `You are an expert e-commerce reputation analyst. Analyze user behavior and provide precise reputation score changes. Always respond in valid JSON format with numeric scores between -100 and +100.`;
 
@@ -45,7 +56,7 @@ class ASIClient {
         
         RECENT BEHAVIOR (last 10 orders):
         ${userData.recentOrders.map((order, i) =>
-            `${i + 1}. $${order.orderValue} - ${this.getStatusName(order.status)} - ${order.productCategory}`
+            `${i + 1}. $${order.orderValue} - ${this.getStatusName(order.status)} - ${order.productCategory} - Destination: ${order.destination}`
         ).join('\n')}
 
         CURRENT ACTION: ${action}
@@ -83,6 +94,9 @@ class ASIClient {
         return await this.makeRequest(messages, 1200, 0.2);
     }
 
+    /**
+     * Predict customer risk profile
+     */
     async predictCustomerRisk(userData) {
         const systemPrompt = `You are an expert at predicting customer risk in e-commerce. Analyze patterns and predict future behavior risks.`;
 
@@ -98,7 +112,7 @@ class ASIClient {
 
         RECENT PATTERN:
         ${userData.recentOrders.slice(-5).map((order, i) =>
-            `${i + 1}. $${order.orderValue} - ${this.getStatusName(order.status)}`
+            `${i + 1}. $${order.orderValue} - ${this.getStatusName(order.status)} - ${order.destination}`
         ).join('\n')}
 
         Respond in this EXACT JSON format:
@@ -121,8 +135,66 @@ class ASIClient {
         return await this.makeRequest(messages, 800, 0.3);
     }
 
+    /**
+     * Analyze logistic partner allocation
+     */
+    async analyzeLogisticAllocation(userData, currentReputation, orderDetails, logisticPartners) {
+        const systemPrompt = `You are an expert logistics analyst. Analyze customer profile and recommend the best logistic partner based on reputation thresholds and risk factors.`;
+
+        const userPrompt = `
+        LOGISTIC PARTNER ALLOCATION ANALYSIS:
+
+        CUSTOMER PROFILE:
+        - User ID: ${userData.userId || 'Unknown'}
+        - Current Reputation: ${currentReputation}
+        - Total Orders: ${userData.totalOrders}
+        - Success Rate: ${userData.totalOrders > 0 ? (((userData.totalOrders - userData.deliveryFailures - userData.returnedOrders) / userData.totalOrders) * 100).toFixed(1) : 0}%
+        - Return Rate: ${userData.totalOrders > 0 ? ((userData.returnedOrders / userData.totalOrders) * 100).toFixed(1) : 0}%
+        - Delivery Failure Rate: ${userData.totalOrders > 0 ? ((userData.deliveryFailures / userData.totalOrders) * 100).toFixed(1) : 0}%
+
+        ORDER DETAILS:
+        - Order Value: $${orderDetails.orderValue}
+        - Product Category: ${orderDetails.productCategory}
+        - Destination: ${orderDetails.destination}
+
+        AVAILABLE LOGISTIC PARTNERS:
+        ${logisticPartners.map((partner, i) =>
+            `${i + 1}. ${partner.name} - Min Reputation: ${partner.minReputationThreshold} - Max Reputation: ${partner.maxReputationThreshold || 'No limit'} - Service Areas: ${partner.serviceAreas?.join(', ') || 'All'}`
+        ).join('\n')}
+
+        ALLOCATION CRITERIA:
+        - Customer reputation should match partner's preferred reputation range
+        - Consider partner's service capabilities and areas
+        - Factor in customer risk profile
+        - Optimize for successful delivery probability
+
+        Respond in this EXACT JSON format:
+        {
+            "recommended_partner": "partner_name",
+            "partner_id": "partner_id",
+            "confidence": <float 0.0 to 1.0>,
+            "reasoning": ["reason1", "reason2", "reason3"],
+            "risk_mitigation": ["mitigation1", "mitigation2"],
+            "alternative_partners": ["partner1", "partner2"],
+            "delivery_success_probability": <float 0.0 to 1.0>
+        }
+        `;
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ];
+
+        return await this.makeRequest(messages, 1000, 0.3);
+    }
+
+    /**
+     * Get human-readable status name
+     */
     getStatusName(status) {
         const names = ['CREATED', 'PAID', 'SHIPPED', 'DELIVERED', 'RETURNED', 'DELIVERY_FAILED', 'COMPLETED', 'CANCELLED'];
         return names[status] || 'UNKNOWN';
     }
 }
+
+module.exports = ASIClient;
