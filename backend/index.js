@@ -1,7 +1,9 @@
 const express = require('express');
 const { ethers } = require('ethers');
 const cors = require('cors');
+const { v4 } = require('uuid');
 require('dotenv').config();
+const SelfBackendVerifier = require('@selfxyz/core')
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -269,7 +271,6 @@ app.post('/reputation/batch', authenticateApiKey, async (req, res) => {
     }
 });
 
-
 const selfBackendVerifier = new SelfBackendVerifier(
     "test-scope", // scope string
     "https://ke2j1k45n1.execute-api.eu-west-3.amazonaws.com/dev/api/verify", // endpoint (your backend verification API)
@@ -283,6 +284,19 @@ const selfBackendVerifier = new SelfBackendVerifier(
     }),
     "uuid"
 );
+
+
+app.post("/api/create-session", async (req, res) => {
+
+    const uuid = v4();
+
+    return res.status(200).json({
+        status: "success",
+        res: uuid,
+        result: true,
+    });
+
+})
 
 app.post("/api/verify", async (req, res) => {
     try {
@@ -304,6 +318,7 @@ app.post("/api/verify", async (req, res) => {
         );
 
         const nullifier = result.discloseOutput.nullifier;
+
 
         const { isValid, isMinimumAgeValid, isOfacValid } = result.isValidDetails;
         if (!isValid || !isMinimumAgeValid || isOfacValid) {
