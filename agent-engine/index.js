@@ -1,12 +1,11 @@
 const express = require('express');
-const { ethers } = require('ethers');
 const cors = require('cors');
 const crypto = require('crypto');
-const axios = require('axios');
 require('dotenv').config();
-const BlockchainDataService = require('./modules/BlockchainDataService');
-const ASIReputationEngine = require('./modules/AsiRepEngine')
-const ASIClient = require('./modules/AsiClient');
+
+// Import our custom services
+const ASIReputationEngine = require('./ASIReputationEngine');
+const FirebaseLogisticsService = require('./FirebaseLogisticsService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,54 +14,26 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Contract ABIs
-const REGISTRY_ABI = [
-    "function increaseRep(bytes32 userIdentifier, uint256 points) external",
-    "function decreaseRep(bytes32 userIdentifier, uint256 points) external",
-    "function getRepByUser(bytes32 userIdentifier) public view returns(uint256)"
-];
+// Initialize services
+const reputationEngine = new ASIReputationEngine(process.env.ASI_API_KEY, {
+    rpcUrl: process.env.RPC_URL,
+    privateKey: process.env.PRIVATE_KEY,
+    registryAddress: process.env.REGISTRY_CONTRACT_ADDRESS,
+    orderRegistryAddress: process.env.ORDER_REGISTRY_CONTRACT_ADDRESS
+});
 
-const ORDER_HISTORY_ABI = [
-    "function createOrder(bytes32 orderId, bytes32 userId, uint256 orderValue, string memory productCategory) external",
-    "function updateOrderStatus(bytes32 orderId, uint8 newStatus) external",
-    "function recordDeliveryFailure(bytes32 orderId, uint8 reason) external",
-    "function recordProductReturn(bytes32 orderId, string memory returnReason) external",
-    "function markOrderCompleted(bytes32 orderId) external",
-    "function getUserBehaviorStats(bytes32 userId) external view returns (uint256 totalOrders, uint256 completedOrders, uint256 returnedOrders, uint256 deliveryFailures, uint256 totalOrderValue, uint256 avgOrderValue)",
-    "function getUserOrderHistory(bytes32 userId) external view returns (tuple(bytes32 orderId, bytes32 userId, uint256 orderValue, uint256 createdAt, uint256 updatedAt, uint8 status, uint8 failureReason, string productCategory, uint8 deliveryAttempts, uint256 returnedAt, string returnReason, bool isActive)[] memory)",
-    "function getOrder(bytes32 orderId) external view returns (tuple(bytes32 orderId, bytes32 userId, uint256 orderValue, uint256 createdAt, uint256 updatedAt, uint8 status, uint8 failureReason, string productCategory, uint8 deliveryAttempts, uint256 returnedAt, string returnReason, bool isActive))"
-];
+const logisticsService = new FirebaseLogisticsService();
 
-// Enums
+// Order Status Enum
 const OrderStatus = {
     CREATED: 0, PAID: 1, SHIPPED: 2, DELIVERED: 3,
     RETURNED: 4, DELIVERY_FAILED: 5, COMPLETED: 6, CANCELLED: 7
 };
 
-const DeliveryFailureReason = {
-    NONE: 0, USER_ABSENT: 1, USER_REFUSED: 2, ADDRESS_INVALID: 3, OTHER: 4
-};
-
-// Initialize blockchain connection
-let provider, wallet, registryContract, orderHistoryContract;
-
-try {
-    provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-    wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-    registryContract = new ethers.Contract(process.env.REGISTRY_CONTRACT_ADDRESS, REGISTRY_ABI, wallet);
-    orderHistoryContract = new ethers.Contract(process.env.ORDER_HISTORY_CONTRACT_ADDRESS, ORDER_HISTORY_ABI, wallet);
-} catch (error) {
-    console.error('Blockchain initialization failed:', error.message);
-}
-
 // Utility functions
-const stringToBytes32 = (str) => ethers.id(str);
-const generateOrderId = () => ethers.id(crypto.randomBytes(16).toString('hex'));
+const generateOrderId = () => crypto.randomBytes(16).toString('hex');
 
-// Initialize engines
-const reputationEngine = new ASIReputationEngine();
-
-// Middleware
+// Authentication middleware
 const authenticateApiKey = (req, res, next) => {
     const apiKey = req.header('X-API-Key') || req.query.apiKey;
     if (!apiKey || apiKey !== process.env.AI_API_KEY) {
@@ -73,49 +44,476 @@ const authenticateApiKey = (req, res, next) => {
 
 // Routes
 
+/**
+ * Health check endpoint
+ */
 app.get('/health', async (req, res) => {
-    let asiStatus = 'unknown';
     try {
-        const testResponse = await reputationEngine.asiClient.makeRequest([
-            { role: 'system', content: 'Test connection' },
-            { role: 'user', content: 'Respond with {"status": "connected"}' }
-        ], 50);
-        asiStatus = testResponse.status === 'connected' ? 'connected' : 'error';
-    } catch (error) {
-        asiStatus = 'disconnected';
-    }
+        // Test all service connections
+        const reputationTest = await reputationEngine.testConnections();
+        const firebaseTest = await logisticsService.testConnection();
 
-    res.json({
-        success: true,
-        message: 'ASI-Powered Reputation Engine Online',
-        timestamp: new Date().toISOString(),
-        services: {
-            asi_api: asiStatus,
-            blockchain: provider ? 'connected' : 'disconnected'
+        console.log('📊 Connection Status:');
+        console.log(`   ASI API: ${connectionTests.asi.connected ? '✅' : '❌'}`);
+        console.log(`   Blockchain: ${connectionTests.blockchain.connected ? '✅' : '❌'}`);
+        console.log(`   Firebase: ${firebaseTest.firestore.connected ? '✅' : '❌'}`);
+
+        if (!connectionTests.asi.connected) {
+            console.warn('⚠️  ASI API unavailable - will use fallback scoring');
         }
-    });
+
+        if (!connectionTests.blockchain.connected) {
+            console.error('❌ Blockchain connection failed - cannot continue');
+            process.exit(1);
+        }
+
+        if (!firebaseTest.firestore.connected) {
+            console.error('❌ Firebase connection failed - cannot continue');
+            process.exit(1);
+        }
+
+        // Start server
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('🚀 ASI-Powered E-commerce Reputation & Logistics Engine');
+            console.log(`📡 Server: http://localhost:${PORT}`);
+            console.log(`🧠 ASI Integration: ${connectionTests.asi.connected ? 'Active' : 'Fallback Mode'}`);
+            console.log(`⛓️  Blockchain: ${connectionTests.blockchain.connected ? 'Connected' : 'Disconnected'}`);
+            console.log(`🔥 Firebase: ${firebaseTest.firestore.connected ? 'Connected' : 'Disconnected'}`);
+            console.log('');
+            console.log('📋 Key Features:');
+            console.log('   • Intelligent reputation scoring with ASI');
+            console.log('   • Smart logistics partner allocation');
+            console.log('   • Blockchain-based immutable records');
+            console.log('   • Real-time logistics tracking');
+            console.log('   • Comprehensive analytics dashboard');
+            console.log('');
+            console.log('🔗 Quick Links:');
+            console.log(`   Health Check: http://localhost:${PORT}/health`);
+            console.log(`   Analytics: http://localhost:${PORT}/analytics/:userId`);
+            console.log(`   Create Order: POST http://localhost:${PORT}/orders/create`);
+            console.log(`   Partners: http://localhost:${PORT}/logistics/partners`);
+            console.log('');
+            console.log('Ready to process intelligent e-commerce operations! 🎯');
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
 });
 
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('📴 Received SIGTERM, shutting down gracefully...');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('📴 Received SIGINT, shutting down gracefully...');
+    process.exit(0);
+});
+
+// Start the server
+startServer();
+
+module.exports = app; testConnection();
+
+const services = {
+    asi_api: reputationTest.asi,
+    blockchain: reputationTest.blockchain,
+    firebase: firebaseTest
+};
+
+const allHealthy = Object.values(services).every(service =>
+    service.connected || (service.firestore && service.firestore.connected)
+);
+
+res.status(allHealthy ? 200 : 503).json({
+    success: allHealthy,
+    message: 'ASI-Powered E-commerce Agent with Logistics',
+    timestamp: new Date().toISOString(),
+    services
+});
+
+
+/**
+ * Get comprehensive user analytics
+ */
 app.get('/analytics/:userId', authenticateApiKey, async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // Get comprehensive user data
-        const userData = await BlockchainDataService.getUserData(userId);
-        const userBytes32 = stringToBytes32(userId);
-        const currentReputation = await registryContract.getRepByUser(userBytes32);
+        // Get reputation analytics
+        const analytics = await reputationEngine.getUserAnalytics(userId);
 
-        // Get ASI risk assessment
-        let riskAssessment = null;
-        try {
-            riskAssessment = await reputationEngine.asiClient.predictCustomerRisk(userData);
-        } catch (error) {
-            console.warn('Risk assessment failed:', error.message);
+        // Get user's logistics history
+        const logisticsHistory = await logisticsService.getUserAllocations(userId);
+
+        res.json({
+            success: true,
+            data: {
+                ...analytics,
+                logisticsHistory: {
+                    totalAllocations: logisticsHistory.length,
+                    recentAllocations: logisticsHistory.slice(0, 5),
+                    partnerDistribution: logisticsHistory.reduce((acc, allocation) => {
+                        acc[allocation.partnerName] = (acc[allocation.partnerName] || 0) + 1;
+                        return acc;
+                    }, {})
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Analytics error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Create order with intelligent logistics allocation
+ */
+app.post('/orders/create', authenticateApiKey, async (req, res) => {
+    try {
+        const { userId, orderValue, productCategory, destination, customOrderId } = req.body;
+
+        if (!userId || !orderValue || !productCategory || !destination) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId, orderValue, productCategory, and destination are required'
+            });
+        }
+
+        const orderId = customOrderId || generateOrderId();
+
+        // Get available logistic partners
+        const allPartners = await logisticsService.getActiveLogisticPartners();
+
+        if (allPartners.length === 0) {
+            return res.status(503).json({
+                success: false,
+                error: 'No logistic partners available'
+            });
+        }
+
+        const orderDetails = {
+            orderId,
+            userId,
+            orderValue: parseFloat(orderValue),
+            productCategory,
+            destination
+        };
+
+        // Process order with ASI-powered allocation
+        const result = await reputationEngine.processOrder(orderDetails, allPartners);
+
+        // Store allocation in Firebase
+        const allocationData = {
+            partnerId: result.logisticAllocation.partnerId,
+            partnerName: result.logisticAllocation.recommendedPartner,
+            allocationMethod: result.logisticAllocation.allocationMethod,
+            confidence: result.logisticAllocation.confidence,
+            reasoning: result.logisticAllocation.reasoning,
+            userReputation: await reputationEngine.blockchainService.getUserReputation(userId),
+            deliverySuccessProbability: result.logisticAllocation.deliverySuccessProbability
+        };
+
+        const firebaseAllocation = await logisticsService.allocateOrder(orderDetails, allocationData);
+
+        res.json({
+            success: true,
+            message: 'Order created with intelligent logistics allocation',
+            data: {
+                orderId,
+                userId,
+                orderValue,
+                productCategory,
+                destination,
+                reputationAnalysis: result.reputationAnalysis,
+                logisticAllocation: result.logisticAllocation,
+                allocationId: firebaseAllocation.allocationId,
+                blockchain: result.blockchain,
+                estimatedDelivery: '2-3 business days' // Could be enhanced with real logistics API
+            }
+        });
+    } catch (error) {
+        console.error('Order creation error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Record delivery failure with reputation penalty
+ */
+app.post('/orders/:orderId/delivery-failed', authenticateApiKey, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { userId, reason, attemptCount } = req.body;
+
+        if (!userId || !reason) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId and reason are required'
+            });
+        }
+
+        // Process delivery failure with reputation analysis
+        const result = await reputationEngine.processDeliveryFailure(orderId, userId, reason, attemptCount);
+
+        // Find and update allocation in Firebase
+        const allocations = await logisticsService.getUserAllocations(userId);
+        const allocation = allocations.find(a => a.orderId === orderId);
+
+        if (allocation) {
+            await logisticsService.updateAllocationStatus(allocation.id, 'failed', {
+                failureReason: reason,
+                attemptCount: attemptCount || 1
+            });
         }
 
         res.json({
             success: true,
-            message: 'ASI risk assessment completed',
+            message: 'Delivery failure recorded and reputation updated',
+            data: result
+        });
+    } catch (error) {
+        console.error('Delivery failure error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Record product return with reputation analysis
+ */
+app.post('/orders/:orderId/return', authenticateApiKey, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { userId, returnReason } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+        }
+
+        // Process product return with reputation analysis
+        const result = await reputationEngine.processProductReturn(orderId, userId, returnReason);
+
+        // Update allocation in Firebase
+        const allocations = await logisticsService.getUserAllocations(userId);
+        const allocation = allocations.find(a => a.orderId === orderId);
+
+        if (allocation) {
+            await logisticsService.updateAllocationStatus(allocation.id, 'returned', {
+                returnReason: returnReason || ''
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Product return recorded and reputation updated',
+            data: result
+        });
+    } catch (error) {
+        console.error('Product return error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Mark order as completed with rewards
+ */
+app.post('/orders/:orderId/complete', authenticateApiKey, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'userId is required'
+            });
+        }
+
+        // Process order completion with reputation rewards
+        const result = await reputationEngine.processOrderCompletion(orderId, userId);
+
+        // Update allocation in Firebase
+        const allocations = await logisticsService.getUserAllocations(userId);
+        const allocation = allocations.find(a => a.orderId === orderId);
+
+        if (allocation) {
+            await logisticsService.updateAllocationStatus(allocation.id, 'delivered');
+        }
+
+        res.json({
+            success: true,
+            message: 'Order completed - customer rewarded',
+            data: result
+        });
+    } catch (error) {
+        console.error('Order completion error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Record positive behavior with rewards
+ */
+app.post('/behavior/positive', authenticateApiKey, async (req, res) => {
+    try {
+        const { userId, behaviorType, orderId, details, impact } = req.body;
+
+        const behaviorDetails = {
+            orderId,
+            details,
+            impact: impact || 'medium'
+        };
+
+        const result = await reputationEngine.processPositiveBehavior(userId, behaviorType, behaviorDetails);
+
+        res.json({
+            success: true,
+            message: `Positive behavior (${behaviorType}) recorded and rewarded`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Positive behavior error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Logistics Management Routes
+
+/**
+ * Add new logistic partner
+ */
+app.post('/logistics/partners', authenticateApiKey, async (req, res) => {
+    try {
+        const result = await logisticsService.addLogisticPartner(req.body);
+
+        res.json({
+            success: true,
+            message: 'Logistic partner added successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Add partner error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Get all active logistic partners
+ */
+app.get('/logistics/partners', authenticateApiKey, async (req, res) => {
+    try {
+        const partners = await logisticsService.getActiveLogisticPartners();
+
+        res.json({
+            success: true,
+            data: {
+                partners,
+                totalCount: partners.length
+            }
+        });
+    } catch (error) {
+        console.error('Get partners error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Get partner performance analytics
+ */
+app.get('/logistics/partners/:partnerId/performance', authenticateApiKey, async (req, res) => {
+    try {
+        const { partnerId } = req.params;
+        const days = parseInt(req.query.days) || 30;
+
+        const performance = await logisticsService.getPartnerPerformance(partnerId, days);
+        const capacity = await logisticsService.getPartnerCapacityStatus(partnerId);
+        const recentAllocations = await logisticsService.getPartnerAllocations(partnerId, 20);
+
+        res.json({
+            success: true,
+            data: {
+                performance,
+                capacity,
+                recentAllocations: recentAllocations.slice(0, 10)
+            }
+        });
+    } catch (error) {
+        console.error('Partner performance error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Search partners by criteria
+ */
+app.post('/logistics/partners/search', authenticateApiKey, async (req, res) => {
+    try {
+        const criteria = req.body;
+        const partners = await logisticsService.searchPartners(criteria);
+
+        res.json({
+            success: true,
+            data: {
+                partners,
+                searchCriteria: criteria,
+                resultCount: partners.length
+            }
+        });
+    } catch (error) {
+        console.error('Partner search error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Get system-wide logistics analytics
+ */
+app.get('/logistics/analytics', authenticateApiKey, async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+        const analytics = await logisticsService.getSystemAnalytics(days);
+
+        res.json({
+            success: true,
+            data: {
+                ...analytics,
+                period: `${days} days`,
+                generatedAt: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('System analytics error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ASI-Powered Analysis Routes
+
+/**
+ * Batch risk assessment
+ */
+app.post('/asi/risk-assessment', authenticateApiKey, async (req, res) => {
+    try {
+        const { userIds } = req.body;
+
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'userIds array is required'
+            });
+        }
+
+        const assessments = await reputationEngine.batchRiskAssessment(userIds);
+
+        res.json({
+            success: true,
+            message: 'Batch risk assessment completed',
             data: {
                 totalUsers: userIds.length,
                 processed: assessments.length,
@@ -133,6 +531,9 @@ app.get('/analytics/:userId', authenticateApiKey, async (req, res) => {
     }
 });
 
+/**
+ * ASI consultation for specific customer questions
+ */
 app.post('/asi/consult', authenticateApiKey, async (req, res) => {
     try {
         const { userId, question, context } = req.body;
@@ -145,46 +546,45 @@ app.post('/asi/consult', authenticateApiKey, async (req, res) => {
         }
 
         // Get user data for context
-        const userData = await BlockchainDataService.getUserData(userId);
-        const userBytes32 = stringToBytes32(userId);
-        const currentReputation = await registryContract.getRepByUser(userBytes32);
+        const analytics = await reputationEngine.getUserAnalytics(userId);
+        const logisticsHistory = await logisticsService.getUserAllocations(userId, 10);
 
-        // Prepare consultation prompt
-        const systemPrompt = `You are an expert e-commerce consultant. Answer specific questions about customers based on their behavior data.`;
+        // Prepare consultation with full context
+        const fullContext = {
+            ...context,
+            logisticsHistory: logisticsHistory.map(allocation => ({
+                partner: allocation.partnerName,
+                status: allocation.status,
+                method: allocation.allocationMethod
+            }))
+        };
+
+        // Use ASI client directly for consultation
+        const systemPrompt = `You are an expert e-commerce consultant with access to customer behavior and logistics data.`;
 
         const userPrompt = `
         CUSTOMER CONSULTATION REQUEST:
         
         Customer ID: ${userId}
-        Current Reputation Score: ${currentReputation.toString()}
+        Current Reputation: ${analytics.currentReputation}
         
-        CUSTOMER DATA:
-        - Total Orders: ${userData.totalOrders}
-        - Completed Orders: ${userData.completedOrders}
-        - Returned Orders: ${userData.returnedOrders}
-        - Delivery Failures: ${userData.deliveryFailures}
-        - Total Spending: ${userData.totalOrderValue.toFixed(2)}
-        - Average Order: ${userData.avgOrderValue.toFixed(2)}
-        - Return Rate: ${userData.totalOrders > 0 ? ((userData.returnedOrders / userData.totalOrders) * 100).toFixed(1) : 0}%
-        - Success Rate: ${userData.totalOrders > 0 ? (((userData.totalOrders - userData.deliveryFailures - userData.returnedOrders) / userData.totalOrders) * 100).toFixed(1) : 0}%
+        CUSTOMER PROFILE:
+        - Total Orders: ${analytics.statistics.totalOrders}
+        - Success Rate: ${analytics.metrics.successRate}
+        - Return Rate: ${analytics.metrics.returnRate}
+        - Recent Logistics: ${logisticsHistory.length} allocations
 
-        RECENT ORDERS:
-        ${userData.recentOrders.slice(0, 5).map((order, i) =>
-            `${i + 1}. ${order.orderValue} - ${reputationEngine.asiClient.getStatusName(order.status)} - ${order.productCategory}`
-        ).join('\n')}
-
-        ADDITIONAL CONTEXT: ${context || 'None provided'}
-        
         QUESTION: ${question}
+        CONTEXT: ${JSON.stringify(fullContext)}
         
-        Provide a comprehensive answer in JSON format:
+        Provide comprehensive answer in JSON format:
         {
             "answer": "Detailed response to the question",
             "confidence": <float 0.0 to 1.0>,
-            "recommendation": "Specific recommendation based on analysis",
+            "recommendation": "Specific recommendation",
             "risk_factors": ["factor1", "factor2"],
             "supporting_evidence": ["evidence1", "evidence2"],
-            "next_actions": ["action1", "action2"]
+            "logistics_insights": ["insight1", "insight2"]
         }
         `;
 
@@ -201,13 +601,12 @@ app.post('/asi/consult', authenticateApiKey, async (req, res) => {
             data: {
                 userId,
                 question,
-                context,
-                currentReputation: currentReputation.toString(),
                 consultation,
                 customerSummary: {
-                    totalOrders: userData.totalOrders,
-                    returnRate: userData.totalOrders > 0 ? ((userData.returnedOrders / userData.totalOrders) * 100).toFixed(1) + '%' : '0%',
-                    avgOrderValue: userData.avgOrderValue.toFixed(2)
+                    reputation: analytics.currentReputation,
+                    totalOrders: analytics.statistics.totalOrders,
+                    successRate: analytics.metrics.successRate,
+                    logisticsPartners: [...new Set(logisticsHistory.map(a => a.partnerName))]
                 },
                 timestamp: new Date().toISOString()
             }
@@ -218,192 +617,71 @@ app.post('/asi/consult', authenticateApiKey, async (req, res) => {
     }
 });
 
-app.post('/behavior/positive', authenticateApiKey, async (req, res) => {
+// Admin Routes
+
+/**
+ * Initialize default logistic partners (for setup)
+ */
+app.post('/admin/init-partners', authenticateApiKey, async (req, res) => {
     try {
-        const { userId, behaviorType, orderId, details, impact } = req.body;
-
-        const validBehaviors = ['EARLY_PAYMENT', 'POSITIVE_REVIEW', 'REFERRAL', 'LOYALTY_PROGRAM'];
-        if (!validBehaviors.includes(behaviorType)) {
-            return res.status(400).json({
-                success: false,
-                error: `Invalid behavior type. Valid: ${validBehaviors.join(', ')}`
-            });
-        }
-
-        let orderValue = 0;
-        let orderContext = {};
-
-        if (orderId) {
-            try {
-                const orderBytes32 = stringToBytes32(orderId);
-                const order = await orderHistoryContract.getOrder(orderBytes32);
-                orderValue = Number(ethers.formatEther(order.orderValue));
-                orderContext = {
-                    productCategory: order.productCategory,
-                    orderAge: Math.floor((Date.now() - Number(order.createdAt) * 1000) / (1000 * 60 * 60 * 24))
-                };
-            } catch (error) {
-                console.warn('Could not fetch order details:', error.message);
-            }
-        }
-
-        // ASI analysis for positive behavior
-        const decision = await reputationEngine.calculateReputationChange(
-            userId,
-            behaviorType,
-            {
-                orderValue,
-                details,
-                impact: impact || 'medium',
-                ...orderContext
-            }
-        );
-
-        // Update reputation
-        const reputationTx = await BlockchainDataService.updateReputation(
-            userId,
-            decision.reputationChange
-        );
+        const result = await logisticsService.initializeDefaultPartners();
 
         res.json({
             success: true,
-            message: `Positive behavior (${behaviorType}) analyzed and rewarded`,
-            data: {
-                userId,
-                orderId,
-                behaviorType,
-                details,
-                impact,
-                reputationAnalysis: decision,
-                blockchain: {
-                    reputationUpdate: reputationTx
-                }
-            }
+            message: 'Default partners initialization completed',
+            data: result
         });
     } catch (error) {
-        console.error('Positive behavior error:', error);
+        console.error('Partner initialization error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
+/**
+ * Clean up old logistics records
+ */
+app.post('/admin/cleanup', authenticateApiKey, async (req, res) => {
+    try {
+        const daysToKeep = parseInt(req.body.daysToKeep) || 90;
+        const result = await logisticsService.cleanupOldRecords(daysToKeep);
+
+        res.json({
+            success: true,
+            message: `Cleanup completed - removed records older than ${daysToKeep} days`,
+            data: result
+        });
+    } catch (error) {
+        console.error('Cleanup error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get order details with logistics info
 app.get('/orders/:orderId', authenticateApiKey, async (req, res) => {
     try {
         const { orderId } = req.params;
-        const orderBytes32 = stringToBytes32(orderId);
 
-        const order = await orderHistoryContract.getOrder(orderBytes32);
+        // Get order from blockchain
+        const order = await reputationEngine.blockchainService.getOrder(orderId);
+
+        // Get logistics allocation
+        const allocations = await logisticsService.getUserAllocations(order.userId);
+        const allocation = allocations.find(a => a.orderId === orderId);
 
         res.json({
             success: true,
             data: {
-                orderId,
-                orderDetails: {
-                    userId: order.userId,
-                    orderValue: Number(ethers.formatEther(order.orderValue)).toFixed(2),
-                    status: Number(order.status),
-                    statusName: reputationEngine.asiClient.getStatusName(Number(order.status)),
-                    failureReason: Number(order.failureReason),
-                    productCategory: order.productCategory,
-                    deliveryAttempts: Number(order.deliveryAttempts),
-                    createdAt: new Date(Number(order.createdAt) * 1000).toISOString(),
-                    updatedAt: new Date(Number(order.updatedAt) * 1000).toISOString(),
-                    returnReason: order.returnReason || null,
-                    isActive: order.isActive
-                }
+                order: {
+                    ...order,
+                    statusName: reputationEngine.asiClient.getStatusName(order.status),
+                    createdAt: new Date(order.createdAt * 1000).toISOString(),
+                    updatedAt: new Date(order.updatedAt * 1000).toISOString()
+                },
+                logistics: allocation || null
             }
         });
     } catch (error) {
         console.error('Get order error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Admin endpoint to manually trigger reputation recalculation
-app.post('/admin/recalculate-reputation', authenticateApiKey, async (req, res) => {
-    try {
-        const { userId, reason } = req.body;
-
-        if (!userId) {
-            return res.status(400).json({
-                success: false,
-                error: 'userId is required'
-            });
-        }
-
-        // Get current user data
-        const userData = await BlockchainDataService.getUserData(userId);
-        const userBytes32 = stringToBytes32(userId);
-        const currentReputation = await registryContract.getRepByUser(userBytes32);
-
-        // Get comprehensive ASI analysis
-        const riskAssessment = await reputationEngine.asiClient.predictCustomerRisk(userData);
-
-        // Suggest reputation adjustment based on comprehensive analysis
-        const systemPrompt = `You are an expert reputation auditor. Based on complete customer history, suggest if reputation adjustment is needed.`;
-
-        const userPrompt = `
-        REPUTATION AUDIT REQUEST:
-        
-        Current Reputation: ${currentReputation.toString()}
-        Reason for Review: ${reason || 'Manual review'}
-        
-        CUSTOMER PERFORMANCE:
-        - Total Orders: ${userData.totalOrders}
-        - Success Rate: ${userData.totalOrders > 0 ? (((userData.totalOrders - userData.deliveryFailures - userData.returnedOrders) / userData.totalOrders) * 100).toFixed(1) : 0}%
-        - Return Rate: ${userData.totalOrders > 0 ? ((userData.returnedOrders / userData.totalOrders) * 100).toFixed(1) : 0}%
-        - Total Value: ${userData.totalOrderValue.toFixed(2)}
-        
-        RISK ASSESSMENT:
-        - Risk Score: ${riskAssessment.risk_score}
-        - Risk Category: ${riskAssessment.risk_category}
-        - Future Return Probability: ${(riskAssessment.future_return_probability * 100).toFixed(1)}%
-        
-        Based on this analysis, should the reputation be adjusted?
-        
-        Respond in JSON format:
-        {
-            "adjustment_needed": true/false,
-            "suggested_adjustment": <integer -50 to +50>,
-            "justification": "Detailed explanation",
-            "confidence": <float 0.0 to 1.0>,
-            "audit_summary": "Brief summary of findings"
-        }
-        `;
-
-        const messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-        ];
-
-        const auditResult = await reputationEngine.asiClient.makeRequest(messages, 800);
-
-        // Apply adjustment if recommended
-        let adjustmentTx = null;
-        if (auditResult.adjustment_needed && auditResult.suggested_adjustment !== 0) {
-            adjustmentTx = await BlockchainDataService.updateReputation(
-                userId,
-                auditResult.suggested_adjustment
-            );
-        }
-
-        res.json({
-            success: true,
-            message: 'Reputation audit completed',
-            data: {
-                userId,
-                reason,
-                currentReputation: currentReputation.toString(),
-                auditResult,
-                riskAssessment,
-                adjustmentApplied: !!adjustmentTx,
-                blockchain: {
-                    adjustmentTransaction: adjustmentTx
-                },
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        console.error('Reputation recalculation error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -425,29 +703,35 @@ app.use('*', (req, res) => {
         error: 'Endpoint not found',
         availableEndpoints: [
             'GET /health - Service health check',
-            'GET /analytics/:userId - User behavior analytics',
-            'POST /orders/create - Create new order',
+            'GET /analytics/:userId - User analytics with logistics',
+            'POST /orders/create - Create order with logistics allocation',
             'POST /orders/:orderId/delivery-failed - Record delivery failure',
             'POST /orders/:orderId/return - Record product return',
-            'POST /orders/:orderId/complete - Mark order complete',
+            'POST /orders/:orderId/complete - Complete order',
             'POST /behavior/positive - Record positive behavior',
-            'GET /orders/:orderId - Get order details',
+            'GET /orders/:orderId - Get order with logistics info',
+            'POST /logistics/partners - Add logistic partner',
+            'GET /logistics/partners - Get all partners',
+            'GET /logistics/partners/:partnerId/performance - Partner analytics',
+            'POST /logistics/partners/search - Search partners',
+            'GET /logistics/analytics - System logistics analytics',
             'POST /asi/risk-assessment - Batch risk assessment',
-            'POST /asi/consult - AI consultation',
-            'POST /admin/recalculate-reputation - Manual reputation audit'
+            'POST /asi/consult - ASI consultation'
         ]
     });
 });
 
-// Graceful startup
 const startServer = async () => {
     try {
-        // Verify required environment variables
+        console.log('🚀 Starting ASI-Powered E-commerce Reputation & Logistics Engine...\n');
+
+        // Verify environment variables
+        console.log('📋 Checking environment variables...');
         const requiredVars = [
             'RPC_URL',
             'PRIVATE_KEY',
             'REGISTRY_CONTRACT_ADDRESS',
-            'ORDER_HISTORY_CONTRACT_ADDRESS',
+            'ORDER_REGISTRY_CONTRACT_ADDRESS',
             'AI_API_KEY',
             'ASI_API_KEY'
         ];
@@ -456,313 +740,166 @@ const startServer = async () => {
 
         if (missingVars.length > 0) {
             console.error('❌ Missing required environment variables:', missingVars.join(', '));
+            console.error('💡 Please check your .env file and ensure all variables are set');
+            process.exit(1);
+        }
+        console.log('✅ All required environment variables found\n');
+
+        // Test connections
+        console.log('🔧 Testing service connections...');
+
+        console.log('   Testing ASI API...');
+        const connectionTests = await reputationEngine.testConnections();
+
+        console.log('   Testing Firebase...');
+        const firebaseTest = await logisticsService.testConnection();
+
+        console.log('\n📊 Connection Status Summary:');
+        console.log(`   ASI API: ${connectionTests.asi.connected ? '✅ Connected' : '❌ Disconnected'}`);
+        if (!connectionTests.asi.connected) {
+            console.log(`      Error: ${connectionTests.asi.error}`);
+        }
+
+        console.log(`   Blockchain: ${connectionTests.blockchain.connected ? '✅ Connected' : '❌ Disconnected'}`);
+        if (connectionTests.blockchain.connected) {
+            console.log(`      Network: Block ${connectionTests.blockchain.currentBlock}`);
+            console.log(`      Wallet: ${connectionTests.blockchain.walletAddress}`);
+            console.log(`      Balance: ${connectionTests.blockchain.walletBalance} ETH`);
+        } else {
+            console.log(`      Error: ${connectionTests.blockchain.error}`);
+        }
+
+        console.log(`   Firebase Firestore: ${firebaseTest.firestore.connected ? '✅ Connected' : '❌ Disconnected'}`);
+        console.log(`   Firebase Realtime DB: ${firebaseTest.realtimeDatabase.connected ? '✅ Connected' : '❌ Disconnected'}`);
+        if (firebaseTest.firestore.connected) {
+            console.log(`      Project ID: ${firebaseTest.projectId}`);
+        }
+
+        // Check critical dependencies
+        const criticalErrors = [];
+
+        if (!connectionTests.blockchain.connected) {
+            criticalErrors.push('Blockchain connection failed - reputation updates will not work');
+        }
+
+        if (!firebaseTest.firestore.connected) {
+            criticalErrors.push('Firebase Firestore connection failed - logistics tracking will not work');
+        }
+
+        if (criticalErrors.length > 0) {
+            console.error('\n❌ Critical connection failures:');
+            criticalErrors.forEach(error => console.error(`   • ${error}`));
+            console.error('\nCannot continue without these services. Please check your configuration.');
             process.exit(1);
         }
 
-        // Test ASI connection
-        try {
-            const testResponse = await reputationEngine.asiClient.makeRequest([
-                { role: 'system', content: 'Connection test' },
-                { role: 'user', content: 'Respond with {"test": "success"}' }
-            ], 50);
-
-            if (testResponse.test === 'success') {
-                console.log('✅ ASI API connection successful');
-            } else {
-                console.warn('⚠️  ASI API test response unexpected:', testResponse);
-            }
-        } catch (error) {
-            console.warn('⚠️  ASI API connection failed:', error.message);
-            console.warn('Will use fallback scoring when ASI is unavailable');
+        // Warnings for non-critical services
+        if (!connectionTests.asi.connected) {
+            console.warn('\n⚠️  ASI API unavailable - system will use fallback reputation scoring');
+            console.warn('   This may result in less intelligent decision-making');
         }
 
-        // Start server
-        app.listen(PORT, () => {
-            console.log('🚀 ASI-Powered E-commerce Reputation Engine');
-            console.log(`📡 Server: http://localhost:${PORT}`);
-            console.log(`🤖 ASI Integration: ${process.env.ASI_API_KEY ? 'Enabled' : 'Disabled'}`);
-            console.log(`⛓️  Blockchain: ${provider ? 'Connected' : 'Disconnected'}`);
-            console.log('📊 Analytics: GET /analytics/:userId');
-            console.log('🛒 Orders: POST /orders/create');
-            console.log('🎯 AI Features: POST /asi/*');
-            console.log('');
-            console.log('Ready to analyze customer behavior with ASI intelligence! 🧠');
+        if (!firebaseTest.realtimeDatabase.connected) {
+            console.warn('\n⚠️  Firebase Realtime Database unavailable - real-time capacity tracking disabled');
+        }
+
+        // Initialize default data if needed
+        try {
+            console.log('\n🔧 Checking logistics partners...');
+            const existingPartners = await logisticsService.getActiveLogisticPartners();
+
+            if (existingPartners.length === 0) {
+                console.log('   No logistics partners found. Initializing default partners...');
+                const initResult = await logisticsService.initializeDefaultPartners();
+                console.log(`   ✅ Initialized ${initResult.successCount}/${initResult.totalCount} default partners`);
+            } else {
+                console.log(`   ✅ Found ${existingPartners.length} active logistics partners`);
+            }
+        } catch (error) {
+            console.warn('   ⚠️  Could not initialize logistics partners:', error.message);
+        }
+
+        // Start HTTP server
+        console.log('\n🌐 Starting HTTP server...');
+        const server = app.listen(PORT, () => {
+            console.log('\n' + '='.repeat(80));
+            console.log('🚀 ASI-POWERED E-COMMERCE REPUTATION & LOGISTICS ENGINE');
+            console.log('='.repeat(80));
+            console.log(`📡 Server URL: http://localhost:${PORT}`);
+            console.log(`🧠 ASI Mode: ${connectionTests.asi.connected ? 'INTELLIGENT' : 'FALLBACK'}`);
+            console.log(`⛓️  Blockchain: ${connectionTests.blockchain.connected ? 'ACTIVE' : 'INACTIVE'}`);
+            console.log(`🔥 Firebase: ${firebaseTest.firestore.connected ? 'ACTIVE' : 'INACTIVE'}`);
+            console.log(`🕐 Started: ${new Date().toISOString()}`);
+            console.log('='.repeat(80));
+
+            console.log('\n📋 CORE FEATURES:');
+            console.log('   🧠 Intelligent reputation scoring with ASI');
+            console.log('   📦 Smart logistics partner allocation');
+            console.log('   ⛓️  Blockchain-based immutable records');
+            console.log('   📊 Real-time logistics tracking & analytics');
+            console.log('   🎯 Predictive customer risk assessment');
+            console.log('   📈 Comprehensive performance dashboards');
+
+            console.log('\n🔗 API ENDPOINTS:');
+            console.log(`   📊 Health Check: GET localhost:${PORT}/health`);
+            console.log(`   👤 User Analytics: GET localhost:${PORT}/analytics/:userId`);
+            console.log(`   🛒 Create Order: POST localhost:${PORT}/orders/create`);
+            console.log(`   🚚 Logistics Partners: GET localhost:${PORT}/logistics/partners`);
+            console.log(`   🤖 ASI Consultation: POST localhost:${PORT}/asi/consult`);
+            console.log(`   📈 System Analytics: GET localhost:${PORT}/logistics/analytics`);
+
+            console.log('\n💡 GETTING STARTED:');
+            console.log(`   1. Check system health: curl localhost:${PORT}/health`);
+            console.log('   2. Create your first order with intelligent allocation');
+            console.log('   3. View comprehensive analytics and insights');
+            console.log('   4. Monitor logistics partner performance');
+
+            console.log('\n🎯 READY TO PROCESS INTELLIGENT E-COMMERCE OPERATIONS!');
+            console.log('='.repeat(80) + '\n');
         });
+
+        // Handle server startup errors
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`❌ Port ${PORT} is already in use. Please try a different port.`);
+                console.error('💡 Set PORT environment variable to use a different port');
+            } else {
+                console.error('❌ Server startup error:', err.message);
+            }
+            process.exit(1);
+        });
+
+        // Setup periodic maintenance tasks
+        if (firebaseTest.firestore.connected) {
+            console.log('🔄 Setting up maintenance tasks...');
+
+            // Cleanup old records every 24 hours
+            setInterval(async () => {
+                try {
+                    console.log('🧹 Running daily cleanup...');
+                    const result = await logisticsService.cleanupOldRecords(90);
+                    console.log(`✅ Cleanup completed: ${result.cleaned} records removed`);
+                } catch (error) {
+                    console.warn('⚠️  Daily cleanup failed:', error.message);
+                }
+            }, 24 * 60 * 60 * 1000); // 24 hours
+        }
+
+        return server;
+
     } catch (error) {
-        console.error('Failed to start server:', error);
+        console.error('\n❌ CRITICAL ERROR DURING STARTUP:');
+        console.error('   Error:', error.message);
+        if (error.stack) {
+            console.error('   Stack:', error.stack);
+        }
+        console.error('\n💡 TROUBLESHOOTING TIPS:');
+        console.error('   • Check your .env file configuration');
+        console.error('   • Verify blockchain RPC endpoint is accessible');
+        console.error('   • Ensure Firebase serviceAccount.json is present');
+        console.error('   • Check ASI API key validity');
+        console.error('   • Verify network connectivity');
+        console.error('\nExiting...\n');
         process.exit(1);
     }
 };
-
-// Start the server
-startServer();
-
-module.exports = app; json({
-    success: true,
-    data: {
-        userId,
-        currentReputation: currentReputation.toString(),
-        statistics: {
-            totalOrders: userData.totalOrders,
-            completedOrders: userData.completedOrders,
-            returnedOrders: userData.returnedOrders,
-            deliveryFailures: userData.deliveryFailures,
-            totalOrderValue: userData.totalOrderValue,
-            avgOrderValue: userData.avgOrderValue
-        },
-        metrics: {
-            returnRate: userData.totalOrders > 0 ?
-                ((userData.returnedOrders / userData.totalOrders) * 100).toFixed(1) + '%' : '0%',
-            successRate: userData.totalOrders > 0 ?
-                (((userData.totalOrders - userData.deliveryFailures - userData.returnedOrders) / userData.totalOrders) * 100).toFixed(1) + '%' : '0%',
-            avgDaysBetweenOrders: userData.avgDaysBetweenOrders ? userData.avgDaysBetweenOrders.toFixed(1) : 'N/A'
-        },
-        riskAssessment,
-        recentOrdersCount: userData.recentOrders.length
-    }
-});
-
-app.post('/orders/create', authenticateApiKey, async (req, res) => {
-    try {
-        const { userId, orderValue, productCategory, customOrderId } = req.body;
-
-        if (!userId || !orderValue || !productCategory) {
-            return res.status(400).json({
-                success: false,
-                error: 'userId, orderValue, and productCategory are required'
-            });
-        }
-
-        // Generate order ID
-        const orderId = customOrderId ? stringToBytes32(customOrderId) : generateOrderId();
-        const userBytes32 = stringToBytes32(userId);
-
-        // Create order on blockchain
-        const orderTx = await orderHistoryContract.createOrder(
-            orderId,
-            userBytes32,
-            ethers.parseEther(orderValue.toString()),
-            productCategory
-        );
-        const orderReceipt = await orderTx.wait();
-
-        // Calculate reputation change using ASI
-        const decision = await reputationEngine.calculateReputationChange(
-            userId,
-            'PURCHASE_CREATED',
-            { orderValue: parseFloat(orderValue), productCategory }
-        );
-
-        // Update reputation on blockchain
-        const reputationTx = await BlockchainDataService.updateReputation(
-            userId,
-            decision.reputationChange
-        );
-
-        res.json({
-            success: true,
-            message: 'Order created with ASI-powered reputation analysis',
-            data: {
-                orderId: orderId,
-                userId,
-                orderValue,
-                productCategory,
-                reputationAnalysis: decision,
-                blockchain: {
-                    orderCreation: {
-                        hash: orderReceipt.hash,
-                        blockNumber: orderReceipt.blockNumber
-                    },
-                    reputationUpdate: reputationTx
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Order creation error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/orders/:orderId/delivery-failed', authenticateApiKey, async (req, res) => {
-    try {
-        const { orderId } = req.params;
-        const { userId, reason, attemptCount } = req.body;
-
-        if (!userId || !reason) {
-            return res.status(400).json({
-                success: false,
-                error: 'userId and reason are required'
-            });
-        }
-
-        // Map reason to enum
-        const reasonMap = {
-            'absent': DeliveryFailureReason.USER_ABSENT,
-            'refused': DeliveryFailureReason.USER_REFUSED,
-            'invalid_address': DeliveryFailureReason.ADDRESS_INVALID,
-            'other': DeliveryFailureReason.OTHER
-        };
-
-        const failureReason = reasonMap[reason.toLowerCase()] || DeliveryFailureReason.OTHER;
-        const orderBytes32 = stringToBytes32(orderId);
-
-        // Get order details for context
-        const currentOrder = await orderHistoryContract.getOrder(orderBytes32);
-
-        // Record failure on blockchain
-        const tx = await orderHistoryContract.recordDeliveryFailure(orderBytes32, failureReason);
-        const receipt = await tx.wait();
-
-        // Determine action for reputation
-        const action = failureReason === DeliveryFailureReason.USER_REFUSED ?
-            'DELIVERY_FAILED_REFUSED' : 'DELIVERY_FAILED_ABSENT';
-
-        // ASI-powered reputation analysis
-        const decision = await reputationEngine.calculateReputationChange(
-            userId,
-            action,
-            {
-                reason,
-                attemptCount: attemptCount || 1,
-                orderValue: Number(ethers.formatEther(currentOrder.orderValue)),
-                productCategory: currentOrder.productCategory
-            }
-        );
-
-        // Update reputation
-        const reputationTx = await BlockchainDataService.updateReputation(
-            userId,
-            decision.reputationChange
-        );
-
-        res.json({
-            success: true,
-            message: 'Delivery failure analyzed and reputation updated',
-            data: {
-                orderId,
-                userId,
-                reason,
-                reputationAnalysis: decision,
-                blockchain: {
-                    deliveryFailure: { hash: receipt.hash, blockNumber: receipt.blockNumber },
-                    reputationUpdate: reputationTx
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Delivery failure error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/orders/:orderId/return', authenticateApiKey, async (req, res) => {
-    try {
-        const { orderId } = req.params;
-        const { userId, returnReason } = req.body;
-
-        if (!userId || !returnReason) {
-            return res.status(400).json({
-                success: false,
-                error: 'userId and returnReason are required'
-            });
-        }
-
-        const orderBytes32 = stringToBytes32(orderId);
-        const currentOrder = await orderHistoryContract.getOrder(orderBytes32);
-
-        // Record return on blockchain
-        const tx = await orderHistoryContract.recordProductReturn(orderBytes32, returnReason);
-        const receipt = await tx.wait();
-
-        // ASI analysis for return
-        const decision = await reputationEngine.calculateReputationChange(
-            userId,
-            'PRODUCT_RETURNED',
-            {
-                returnReason,
-                orderValue: Number(ethers.formatEther(currentOrder.orderValue)),
-                productCategory: currentOrder.productCategory,
-                daysSincePurchase: Math.floor((Date.now() - Number(currentOrder.createdAt) * 1000) / (1000 * 60 * 60 * 24))
-            }
-        );
-
-        // Update reputation
-        const reputationTx = await BlockchainDataService.updateReputation(
-            userId,
-            decision.reputationChange
-        );
-
-        res.json({
-            success: true,
-            message: 'Product return analyzed and reputation updated',
-            data: {
-                orderId,
-                userId,
-                returnReason,
-                reputationAnalysis: decision,
-                blockchain: {
-                    productReturn: { hash: receipt.hash, blockNumber: receipt.blockNumber },
-                    reputationUpdate: reputationTx
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Product return error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/orders/:orderId/complete', authenticateApiKey, async (req, res) => {
-    try {
-        const { orderId } = req.params;
-        const { userId } = req.body;
-
-        if (!userId) {
-            return res.status(400).json({
-                success: false,
-                error: 'userId is required'
-            });
-        }
-
-        const orderBytes32 = stringToBytes32(orderId);
-        const currentOrder = await orderHistoryContract.getOrder(orderBytes32);
-
-        // Mark as completed on blockchain
-        const tx = await orderHistoryContract.markOrderCompleted(orderBytes32);
-        const receipt = await tx.wait();
-
-        // ASI analysis for completion
-        const decision = await reputationEngine.calculateReputationChange(
-            userId,
-            'ORDER_COMPLETED',
-            {
-                orderValue: Number(ethers.formatEther(currentOrder.orderValue)),
-                productCategory: currentOrder.productCategory,
-                daysSincePurchase: Math.floor((Date.now() - Number(currentOrder.createdAt) * 1000) / (1000 * 60 * 60 * 24))
-            }
-        );
-
-        // Update reputation
-        const reputationTx = await BlockchainDataService.updateReputation(
-            userId,
-            decision.reputationChange
-        );
-
-        res.json({
-            success: true,
-            message: 'Order completed - customer rewarded',
-            data: {
-                orderId,
-                userId,
-                reputationAnalysis: decision,
-                blockchain: {
-                    orderCompletion: { hash: receipt.hash, blockNumber: receipt.blockNumber },
-                    reputationUpdate: reputationTx
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Order completion error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
