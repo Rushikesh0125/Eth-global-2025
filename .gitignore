@@ -4,3 +4,8 @@ notes/
 
 .vscode
  
+
+node_modules
+.next
+
+.env
