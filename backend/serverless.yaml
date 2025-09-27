@@ -1,0 +1,28 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: zkexpress
+service: backend-service
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-3
+  stage: dev
+  timeout: 30
+
+functions:
+  app:
+    handler: handler.handler
+    timeout: 30
+    events:
+      - http: ANY /
+      - http: 'ANY {proxy+}'
+    environment:
+      PORT: ${env:PORT}
+      RPC_URL: ${env:RPC_URL}
+      PRIVATE_KEY: ${env:PRIVATE_KEY}
+      CONTRACT_ADDRESS: ${env:CONTRACT_ADDRESS}
+
+package:
+  excludeDevDependencies: true
