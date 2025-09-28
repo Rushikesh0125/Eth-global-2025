@@ -1,26 +1,27 @@
-import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useQueryState, parseAsString, parseAsBoolean } from "nuqs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, Store, Zap, ArrowLeft } from "lucide-react";
-import LogisticsDashboard from "./pages/LogisticsDashboard";
-import DeliveryManagement from "./pages/DeliveryManagement";
-import OracleInterface from "./pages/OracleInterface";
-
-type UserType = "merchant" | "logistics";
-type LogisticsPage = "dashboard" | "delivery" | "oracle";
 
 function App() {
-  const [userType, setUserType] = useState<UserType | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentLogisticsPage, setCurrentLogisticsPage] = useState<LogisticsPage>("dashboard");
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // URL state management with nuqs
+  const [userType, setUserType] = useQueryState("userType", parseAsString);
+  const [email, setEmail] = useQueryState("email", parseAsString);
+  const [password, setPassword] = useQueryState("password", parseAsString);
+  const [isLoggedIn, setIsLoggedIn] = useQueryState("loggedIn", parseAsBoolean);
 
   const handleLogin = () => {
     console.log(`Logging in as ${userType} with email: ${email}`);
     setIsLoggedIn(true);
+    if (userType === "logistics") {
+      navigate("/logistics");
+    }
   };
 
   const handleLogout = () => {
@@ -28,7 +29,7 @@ function App() {
     setUserType(null);
     setEmail("");
     setPassword("");
-    setCurrentLogisticsPage("dashboard");
+    navigate("/");
   };
 
   // If logged in as logistics, show logistics pages
@@ -46,23 +47,23 @@ function App() {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    variant={currentLogisticsPage === "dashboard" ? "default" : "outline"}
+                    variant={location.pathname === "/logistics" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setCurrentLogisticsPage("dashboard")}
+                    onClick={() => navigate("/logistics")}
                   >
                     Dashboard
                   </Button>
                   <Button
-                    variant={currentLogisticsPage === "delivery" ? "default" : "outline"}
+                    variant={location.pathname === "/logistics/delivery" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setCurrentLogisticsPage("delivery")}
+                    onClick={() => navigate("/logistics/delivery")}
                   >
                     Delivery Management
                   </Button>
                   <Button
-                    variant={currentLogisticsPage === "oracle" ? "default" : "outline"}
+                    variant={location.pathname === "/logistics/oracle" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setCurrentLogisticsPage("oracle")}
+                    onClick={() => navigate("/logistics/oracle")}
                   >
                     Oracle Interface
                   </Button>
@@ -78,11 +79,9 @@ function App() {
           </div>
         </div>
 
-        {/* Page Content */}
+        {/* Page Content - Now handled by React Router */}
         <div className="flex-1">
-          {currentLogisticsPage === "dashboard" && <LogisticsDashboard />}
-          {currentLogisticsPage === "delivery" && <DeliveryManagement />}
-          {currentLogisticsPage === "oracle" && <OracleInterface />}
+          {/* Content is rendered by React Router based on current route */}
         </div>
       </div>
     );
@@ -102,7 +101,7 @@ function App() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            <Card className="bg-white/10 backdrop-blur-lg border-white/20 hover:bg-white/20 transition-all duration-300 cursor-pointer group" onClick={() => setUserType("merchant")}>
+            <Card className="bg-white/10 backdrop-blur-lg border-white/20 hover:bg-white/20 transition-all duration-300 group">
               <CardHeader className="text-center">
                 <div className="mx-auto mb-4 p-4 bg-green-500/20 rounded-full w-fit group-hover:bg-green-500/30 transition-colors">
                   <Store className="h-12 w-12 text-green-400" />
@@ -113,7 +112,7 @@ function App() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 text-sm text-gray-300">
+                <div className="space-y-2 text-sm text-gray-300 mb-4">
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
                     Inventory Management
@@ -125,6 +124,30 @@ function App() {
                   <div className="flex items-center">
                     <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
                     Analytics Dashboard
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => setUserType("merchant")}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    Login as Merchant
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      onClick={() => navigate("/zk-checkout")}
+                      variant="outline"
+                      className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+                    >
+                      ZK Checkout
+                    </Button>
+                    <Button 
+                      onClick={() => navigate("/checkout")}
+                      variant="outline"
+                      className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs"
+                    >
+                      Full Checkout
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -189,7 +212,7 @@ function App() {
               id="email"
               type="email"
               placeholder="Enter your email"
-              value={email}
+              value={email || ""}
               onChange={(e) => setEmail(e.target.value)}
               className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
             />
@@ -200,7 +223,7 @@ function App() {
               id="password"
               type="password"
               placeholder="Enter your password"
-              value={password}
+              value={password || ""}
               onChange={(e) => setPassword(e.target.value)}
               className="bg-white/10 border-white/20  placeholder:text-gray-400 font-black"
             />
