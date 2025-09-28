@@ -1,5 +1,5 @@
 // server.js
-const app = require('./index'); // Import the simplified Express app
+const app = require('./index.js'); // Import the simplified Express app
 
 const PORT = process.env.PORT || 3001;
 

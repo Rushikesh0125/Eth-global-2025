@@ -39,7 +39,7 @@ class BlockchainDataService {
     // -------------------------
     async getUserReputation(userId) {
         try {
-            const userBytes32 = stringToBytes32(userId);
+            const userBytes32 = stringToBytes32(userId.toString());
             const rep = await this.registryContract.getRepByUser(userBytes32);
             return Number(rep);
         } catch (error) {
@@ -51,7 +51,7 @@ class BlockchainDataService {
     async updateReputation(userId, reputationChange) {
         if (!reputationChange || reputationChange === 0) return null;
 
-        const userBytes32 = stringToBytes32(userId);
+        const userBytes32 = stringToBytes32(userId.toString());
 
         try {
             let tx;
@@ -82,8 +82,8 @@ class BlockchainDataService {
     // Order Methods
     // -------------------------
     async createOrder(orderId, userId, orderValue, productCategory, destination) {
-        const orderBytes32 = stringToBytes32(orderId);
-        const userBytes32 = stringToBytes32(userId);
+        const orderBytes32 = stringToBytes32(orderId.toString());
+        const userBytes32 = stringToBytes32(userId.toString());
 
         try {
             const tx = await this.orderHistoryContract.createOrder(
@@ -102,7 +102,7 @@ class BlockchainDataService {
     }
 
     async recordDeliveryFailure(orderId, failureReason) {
-        const orderBytes32 = stringToBytes32(orderId);
+        const orderBytes32 = stringToBytes32(orderId.toString());
         try {
             const tx = await this.orderHistoryContract.recordDeliveryFailure(orderBytes32, failureReason);
             const receipt = await tx.wait();
@@ -114,7 +114,7 @@ class BlockchainDataService {
     }
 
     async recordProductReturn(orderId) {
-        const orderBytes32 = stringToBytes32(orderId);
+        const orderBytes32 = stringToBytes32(orderId.toString());
         try {
             const tx = await this.orderHistoryContract.recordProductReturn(orderBytes32);
             const receipt = await tx.wait();
@@ -126,7 +126,7 @@ class BlockchainDataService {
     }
 
     async markOrderCompleted(orderId) {
-        const orderBytes32 = stringToBytes32(orderId);
+        const orderBytes32 = stringToBytes32(orderId.toString());
         try {
             const tx = await this.orderHistoryContract.markOrderCompleted(orderBytes32);
             const receipt = await tx.wait();
@@ -138,7 +138,7 @@ class BlockchainDataService {
     }
 
     async getOrder(orderId) {
-        const orderBytes32 = stringToBytes32(orderId);
+        const orderBytes32 = stringToBytes32(orderId.toString());
         try {
             const order = await this.orderHistoryContract.getOrder(orderBytes32);
             return {
@@ -162,7 +162,7 @@ class BlockchainDataService {
     }
 
     async getUserData(userId) {
-        const userBytes32 = stringToBytes32(userId);
+        const userBytes32 = stringToBytes32(userId.toString());
         try {
             const [
                 totalOrders,
