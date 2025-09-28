@@ -275,7 +275,7 @@ app.post("/reputation/batch", authenticateApiKey, async (req, res) => {
 
 const selfBackendVerifier = new SelfBackendVerifier(
   "test-scope", // scope string
-  "https://ke2j1k45n1.execute-api.eu-west-3.amazonaws.com/dev/api/verify", // endpoint (your backend verification API)
+  "https://8wa6arz9x1.execute-api.eu-west-3.amazonaws.com/dev/api/verify", // endpoint (your backend verification API)
   false, // mockPassport → false = testnet, realPassport → true = mainnet
   AllIds, // allowed attestation IDs map
   new DefaultConfigStore({
@@ -286,6 +286,7 @@ const selfBackendVerifier = new SelfBackendVerifier(
   }),
   "uuid"
 );
+
 app.post("/api/create-session", async (req, res) => {
   try {
     const uuid = v4();
@@ -303,6 +304,50 @@ app.post("/api/create-session", async (req, res) => {
     return res.status(500).json({
       status: "error",
       message: "Failed to create session",
+    });
+  }
+});
+
+app.get("/api/poll-session", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(200).json({
+        status: "error",
+        result: false,
+        reason: "userId is required",
+      });
+    }
+
+    const user = await firebaseService.getUser(userId);
+    if (!user) {
+      return res.status(200).json({
+        status: "error",
+        result: false,
+        reason: "User not found",
+      });
+    }
+
+    const nullifier = await firebaseService.getNullifier(userId);
+
+    if (nullifier) {
+      return res.status(200).json({
+        status: "success",
+        result: true,
+        nullifier,
+      });
+    }
+
+    return res.status(200).json({
+      status: "error",
+      result: false,
+      reason: "User not verified",
+    });
+  } catch (error) {
+    console.error("Error polling session:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to poll session",
     });
   }
 });
